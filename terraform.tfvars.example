@@ -1,0 +1,6 @@
+resource_group_name   = ""
+subscription_id       = ""
+location              = ""
+name_prefix           = "yourprefix"
+alert_email           = ""
+store_front_public_ip = null

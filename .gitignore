@@ -1,0 +1,14 @@
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfplan.*
+*.tfvars
+*.tfvars.json
+kubeconfig*
+identity-recovery/
+*.log
+crash.*
+.env
+.env.*
+__pycache__/
