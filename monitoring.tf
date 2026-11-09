@@ -4,7 +4,7 @@
 
 resource "azurerm_monitor_action_group" "main" {
   name                = "ag-${var.name_prefix}-aks"
-  resource_group_name = azurerm_resource_group.main.name
+  resource_group_name = data.azurerm_resource_group.main.name
   short_name          = "s3ops"
   tags                = local.tags
 
@@ -32,7 +32,7 @@ resource "azurerm_monitor_diagnostic_setting" "kv" {
 # --- Metric Alerts ----------------------------------------------------------
 resource "azurerm_monitor_metric_alert" "appgw_unhealthy" {
   name                = "alert-appgw-unhealthy-host"
-  resource_group_name = azurerm_resource_group.main.name
+  resource_group_name = data.azurerm_resource_group.main.name
   scopes              = [azurerm_application_gateway.main.id]
   description         = "AGIC backend pool has unhealthy hosts"
   severity            = 1
@@ -53,7 +53,7 @@ resource "azurerm_monitor_metric_alert" "appgw_unhealthy" {
 
 resource "azurerm_monitor_metric_alert" "aks_node_cpu" {
   name                = "alert-aks-node-cpu-high"
-  resource_group_name = azurerm_resource_group.main.name
+  resource_group_name = data.azurerm_resource_group.main.name
   scopes              = [azurerm_kubernetes_cluster.main.id]
   description         = "AKS node CPU > 85% for 15 minutes"
   severity            = 2
@@ -76,8 +76,8 @@ resource "azurerm_monitor_metric_alert" "aks_node_cpu" {
 resource "azurerm_monitor_scheduled_query_rules_alert_v2" "aks_node_not_ready" {
   skip_query_validation = true
   name                  = "alert-aks-node-not-ready"
-  resource_group_name   = azurerm_resource_group.main.name
-  location              = azurerm_resource_group.main.location
+  resource_group_name   = data.azurerm_resource_group.main.name
+  location              = data.azurerm_resource_group.main.location
   evaluation_frequency  = "PT5M"
   window_duration       = "PT10M"
   scopes                = [azurerm_log_analytics_workspace.main.id]
@@ -104,8 +104,8 @@ resource "azurerm_monitor_scheduled_query_rules_alert_v2" "aks_node_not_ready" {
 resource "azurerm_monitor_scheduled_query_rules_alert_v2" "aks_pod_restarts" {
   skip_query_validation = true
   name                  = "alert-aks-pod-restarts"
-  resource_group_name   = azurerm_resource_group.main.name
-  location              = azurerm_resource_group.main.location
+  resource_group_name   = data.azurerm_resource_group.main.name
+  location              = data.azurerm_resource_group.main.location
   evaluation_frequency  = "PT5M"
   window_duration       = "PT15M"
   scopes                = [azurerm_log_analytics_workspace.main.id]
@@ -133,8 +133,8 @@ resource "azurerm_monitor_scheduled_query_rules_alert_v2" "aks_pod_restarts" {
 resource "azurerm_monitor_scheduled_query_rules_alert_v2" "aks_image_pull_failures" {
   skip_query_validation = true
   name                  = "alert-aks-image-pull-failures"
-  resource_group_name   = azurerm_resource_group.main.name
-  location              = azurerm_resource_group.main.location
+  resource_group_name   = data.azurerm_resource_group.main.name
+  location              = data.azurerm_resource_group.main.location
   evaluation_frequency  = "PT5M"
   window_duration       = "PT15M"
   scopes                = [azurerm_log_analytics_workspace.main.id]
@@ -163,8 +163,8 @@ resource "azurerm_monitor_scheduled_query_rules_alert_v2" "aks_image_pull_failur
 resource "azurerm_monitor_scheduled_query_rules_alert_v2" "kv_failures" {
   skip_query_validation = true
   name                  = "alert-kv-failures"
-  resource_group_name   = azurerm_resource_group.main.name
-  location              = azurerm_resource_group.main.location
+  resource_group_name   = data.azurerm_resource_group.main.name
+  location              = data.azurerm_resource_group.main.location
   evaluation_frequency  = "PT5M"
   window_duration       = "PT5M"
   scopes                = [azurerm_log_analytics_workspace.main.id]
@@ -193,8 +193,8 @@ resource "azurerm_monitor_scheduled_query_rules_alert_v2" "kv_failures" {
 resource "azurerm_monitor_scheduled_query_rules_alert_v2" "storage_auth_failures" {
   skip_query_validation = true
   name                  = "alert-storage-auth-failures"
-  resource_group_name   = azurerm_resource_group.main.name
-  location              = azurerm_resource_group.main.location
+  resource_group_name   = data.azurerm_resource_group.main.name
+  location              = data.azurerm_resource_group.main.location
   evaluation_frequency  = "PT5M"
   window_duration       = "PT10M"
   scopes                = [azurerm_log_analytics_workspace.main.id]

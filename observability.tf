@@ -1,6 +1,6 @@
 resource "azurerm_subnet" "pods" {
   name                 = "subnet-pods"
-  resource_group_name  = azurerm_resource_group.main.name
+  resource_group_name  = data.azurerm_resource_group.main.name
   virtual_network_name = azurerm_virtual_network.main.name
   address_prefixes     = ["10.30.12.0/22"]
 
@@ -21,15 +21,15 @@ resource "azurerm_role_assignment" "aks_pods" {
 
 resource "azurerm_monitor_workspace" "prometheus" {
   name                = "amw-${var.name_prefix}-${local.suffix}"
-  resource_group_name = azurerm_resource_group.main.name
-  location            = azurerm_resource_group.main.location
+  resource_group_name = data.azurerm_resource_group.main.name
+  location            = data.azurerm_resource_group.main.location
   tags                = local.tags
 }
 
 resource "azurerm_dashboard_grafana" "main" {
   name                  = "graf-${var.name_prefix}-${local.suffix}"
-  resource_group_name   = azurerm_resource_group.main.name
-  location              = azurerm_resource_group.main.location
+  resource_group_name   = data.azurerm_resource_group.main.name
+  location              = data.azurerm_resource_group.main.location
   grafana_major_version = "12"
   sku                   = "Standard"
   tags                  = local.tags
@@ -50,7 +50,7 @@ resource "azurerm_role_assignment" "grafana_metrics_reader" {
 }
 
 resource "azurerm_role_assignment" "grafana_monitoring_reader" {
-  scope                = azurerm_resource_group.main.id
+  scope                = data.azurerm_resource_group.main.id
   role_definition_name = "Monitoring Reader"
   principal_id         = azurerm_dashboard_grafana.main.identity[0].principal_id
 }
@@ -63,16 +63,16 @@ resource "azurerm_role_assignment" "grafana_admin" {
 
 resource "azurerm_monitor_data_collection_endpoint" "prometheus" {
   name                = "dce-${var.name_prefix}"
-  resource_group_name = azurerm_resource_group.main.name
-  location            = azurerm_resource_group.main.location
+  resource_group_name = data.azurerm_resource_group.main.name
+  location            = data.azurerm_resource_group.main.location
   kind                = "Linux"
   tags                = local.tags
 }
 
 resource "azurerm_monitor_data_collection_rule" "prometheus" {
   name                        = "dcr-${var.name_prefix}-prometheus"
-  resource_group_name         = azurerm_resource_group.main.name
-  location                    = azurerm_resource_group.main.location
+  resource_group_name         = data.azurerm_resource_group.main.name
+  location                    = data.azurerm_resource_group.main.location
   data_collection_endpoint_id = azurerm_monitor_data_collection_endpoint.prometheus.id
   kind                        = "Linux"
   tags                        = local.tags

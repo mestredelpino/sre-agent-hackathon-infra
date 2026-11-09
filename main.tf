@@ -23,17 +23,23 @@ locals {
 }
 
 # --- Resource Group ----------------------------------------------------------
-resource "azurerm_resource_group" "main" {
-  name     = "rg-${var.name_prefix}-aks"
-  location = var.location
-  tags     = local.tags
+data "azurerm_resource_group" "main" {
+  name = var.resource_group_name
+}
+
+removed {
+  from = azurerm_resource_group.main
+
+  lifecycle {
+    destroy = false
+  }
 }
 
 # --- Log Analytics -----------------------------------------------------------
 resource "azurerm_log_analytics_workspace" "main" {
   name                = "law-${var.name_prefix}-${local.suffix}"
-  location            = azurerm_resource_group.main.location
-  resource_group_name = azurerm_resource_group.main.name
+  location            = data.azurerm_resource_group.main.location
+  resource_group_name = data.azurerm_resource_group.main.name
   sku                 = "PerGB2018"
   retention_in_days   = 90
   tags                = local.tags
@@ -42,8 +48,8 @@ resource "azurerm_log_analytics_workspace" "main" {
 # --- Key Vault ---------------------------------------------------------------
 resource "azurerm_key_vault" "main" {
   name                          = "kv-${var.name_prefix}-${local.suffix}"
-  location                      = azurerm_resource_group.main.location
-  resource_group_name           = azurerm_resource_group.main.name
+  location                      = data.azurerm_resource_group.main.location
+  resource_group_name           = data.azurerm_resource_group.main.name
   tenant_id                     = data.azurerm_client_config.current.tenant_id
   sku_name                      = "standard"
   soft_delete_retention_days    = 7
@@ -62,8 +68,8 @@ resource "azurerm_key_vault" "main" {
 # --- ACR ---------------------------------------------------------------------
 resource "azurerm_container_registry" "main" {
   name                = "acr${replace(var.name_prefix, "-", "")}${local.suffix}"
-  resource_group_name = azurerm_resource_group.main.name
-  location            = azurerm_resource_group.main.location
+  resource_group_name = data.azurerm_resource_group.main.name
+  location            = data.azurerm_resource_group.main.location
   sku                 = "Basic"
   admin_enabled       = false
   tags                = local.tags
@@ -72,29 +78,29 @@ resource "azurerm_container_registry" "main" {
 # --- VNet --------------------------------------------------------------------
 resource "azurerm_virtual_network" "main" {
   name                = "vnet-${var.name_prefix}"
-  location            = azurerm_resource_group.main.location
-  resource_group_name = azurerm_resource_group.main.name
+  location            = data.azurerm_resource_group.main.location
+  resource_group_name = data.azurerm_resource_group.main.name
   address_space       = ["10.30.0.0/16"]
   tags                = local.tags
 }
 
 resource "azurerm_subnet" "appgw" {
   name                 = "subnet-appgw"
-  resource_group_name  = azurerm_resource_group.main.name
+  resource_group_name  = data.azurerm_resource_group.main.name
   virtual_network_name = azurerm_virtual_network.main.name
   address_prefixes     = ["10.30.0.0/24"]
 }
 
 resource "azurerm_subnet" "aks" {
   name                 = "subnet-aks"
-  resource_group_name  = azurerm_resource_group.main.name
+  resource_group_name  = data.azurerm_resource_group.main.name
   virtual_network_name = azurerm_virtual_network.main.name
   address_prefixes     = ["10.30.4.0/22"]
 }
 
 resource "azurerm_subnet" "pe" {
   name                 = "subnet-pe"
-  resource_group_name  = azurerm_resource_group.main.name
+  resource_group_name  = data.azurerm_resource_group.main.name
   virtual_network_name = azurerm_virtual_network.main.name
   address_prefixes     = ["10.30.8.0/24"]
 }
@@ -102,8 +108,8 @@ resource "azurerm_subnet" "pe" {
 # --- NSG for App Gateway subnet ---------------------------------------------
 resource "azurerm_network_security_group" "appgw" {
   name                = "nsg-${var.name_prefix}-appgw"
-  location            = azurerm_resource_group.main.location
-  resource_group_name = azurerm_resource_group.main.name
+  location            = data.azurerm_resource_group.main.location
+  resource_group_name = data.azurerm_resource_group.main.name
   tags                = local.tags
 
   security_rule {
@@ -151,8 +157,8 @@ resource "azurerm_subnet_network_security_group_association" "appgw" {
 # --- App Gateway (managed by AGIC after AKS provisioning) -------------------
 resource "azurerm_public_ip" "appgw" {
   name                = "pip-${var.name_prefix}-appgw"
-  location            = azurerm_resource_group.main.location
-  resource_group_name = azurerm_resource_group.main.name
+  location            = data.azurerm_resource_group.main.location
+  resource_group_name = data.azurerm_resource_group.main.name
   allocation_method   = "Static"
   sku                 = "Standard"
   tags                = local.tags
@@ -160,8 +166,8 @@ resource "azurerm_public_ip" "appgw" {
 
 resource "azurerm_web_application_firewall_policy" "main" {
   name                = "waf-${var.name_prefix}"
-  resource_group_name = azurerm_resource_group.main.name
-  location            = azurerm_resource_group.main.location
+  resource_group_name = data.azurerm_resource_group.main.name
+  location            = data.azurerm_resource_group.main.location
   tags                = local.tags
 
   policy_settings {
@@ -192,8 +198,8 @@ locals {
 
 resource "azurerm_application_gateway" "main" {
   name                = local.appgw_name
-  location            = azurerm_resource_group.main.location
-  resource_group_name = azurerm_resource_group.main.name
+  location            = data.azurerm_resource_group.main.location
+  resource_group_name = data.azurerm_resource_group.main.name
   firewall_policy_id  = azurerm_web_application_firewall_policy.main.id
   tags                = local.tags
 
@@ -267,8 +273,8 @@ resource "azurerm_application_gateway" "main" {
 resource "azurerm_kubernetes_cluster" "main" {
   depends_on          = [azurerm_role_assignment.aks_subnet, azurerm_role_assignment.aks_pods]
   name                = "aks-${var.name_prefix}-${local.suffix}"
-  location            = azurerm_resource_group.main.location
-  resource_group_name = azurerm_resource_group.main.name
+  location            = data.azurerm_resource_group.main.location
+  resource_group_name = data.azurerm_resource_group.main.name
   dns_prefix          = "aks-${var.name_prefix}-${local.suffix}"
   tags                = local.tags
 
@@ -357,8 +363,8 @@ resource "azurerm_monitor_diagnostic_setting" "aks" {
 # --- Storage Account (workload artifacts/data bucket) -----------------------
 resource "azurerm_storage_account" "main" {
   name                            = "st${var.name_prefix}${local.suffix}"
-  location                        = azurerm_resource_group.main.location
-  resource_group_name             = azurerm_resource_group.main.name
+  location                        = data.azurerm_resource_group.main.location
+  resource_group_name             = data.azurerm_resource_group.main.name
   account_tier                    = "Standard"
   account_replication_type        = "LRS"
   min_tls_version                 = "TLS1_2"
@@ -396,13 +402,13 @@ resource "azurerm_monitor_diagnostic_setting" "storage_blob" {
 # --- Private DNS Zones -------------------------------------------------------
 resource "azurerm_private_dns_zone" "kv" {
   name                = "privatelink.vaultcore.azure.net"
-  resource_group_name = azurerm_resource_group.main.name
+  resource_group_name = data.azurerm_resource_group.main.name
   tags                = local.tags
 }
 
 resource "azurerm_private_dns_zone_virtual_network_link" "kv" {
   name                  = "kv-link"
-  resource_group_name   = azurerm_resource_group.main.name
+  resource_group_name   = data.azurerm_resource_group.main.name
   private_dns_zone_name = azurerm_private_dns_zone.kv.name
   virtual_network_id    = azurerm_virtual_network.main.id
   registration_enabled  = false
@@ -411,13 +417,13 @@ resource "azurerm_private_dns_zone_virtual_network_link" "kv" {
 
 resource "azurerm_private_dns_zone" "blob" {
   name                = "privatelink.blob.core.windows.net"
-  resource_group_name = azurerm_resource_group.main.name
+  resource_group_name = data.azurerm_resource_group.main.name
   tags                = local.tags
 }
 
 resource "azurerm_private_dns_zone_virtual_network_link" "blob" {
   name                  = "blob-link"
-  resource_group_name   = azurerm_resource_group.main.name
+  resource_group_name   = data.azurerm_resource_group.main.name
   private_dns_zone_name = azurerm_private_dns_zone.blob.name
   virtual_network_id    = azurerm_virtual_network.main.id
   registration_enabled  = false
@@ -427,8 +433,8 @@ resource "azurerm_private_dns_zone_virtual_network_link" "blob" {
 # --- Private Endpoints -------------------------------------------------------
 resource "azurerm_private_endpoint" "kv" {
   name                = "pe-${var.name_prefix}-kv"
-  location            = azurerm_resource_group.main.location
-  resource_group_name = azurerm_resource_group.main.name
+  location            = data.azurerm_resource_group.main.location
+  resource_group_name = data.azurerm_resource_group.main.name
   subnet_id           = azurerm_subnet.pe.id
   tags                = local.tags
 
@@ -447,8 +453,8 @@ resource "azurerm_private_endpoint" "kv" {
 
 resource "azurerm_private_endpoint" "storage" {
   name                = "pe-${var.name_prefix}-storage"
-  location            = azurerm_resource_group.main.location
-  resource_group_name = azurerm_resource_group.main.name
+  location            = data.azurerm_resource_group.main.location
+  resource_group_name = data.azurerm_resource_group.main.name
   subnet_id           = azurerm_subnet.pe.id
   tags                = local.tags
 
@@ -467,7 +473,7 @@ resource "azurerm_private_endpoint" "storage" {
 
 # --- Outputs -----------------------------------------------------------------
 output "resource_group" {
-  value = azurerm_resource_group.main.name
+  value = data.azurerm_resource_group.main.name
 }
 
 output "aks_name" {
@@ -483,7 +489,7 @@ output "acr_login_server" {
 }
 
 output "get_credentials_cmd" {
-  value = "az aks get-credentials -g ${azurerm_resource_group.main.name} -n ${azurerm_kubernetes_cluster.main.name}"
+  value = "az aks get-credentials -g ${data.azurerm_resource_group.main.name} -n ${azurerm_kubernetes_cluster.main.name}"
 }
 
 output "storage_account" {

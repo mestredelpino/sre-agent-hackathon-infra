@@ -1,7 +1,3 @@
-resource "azurerm_resource_group" "main" {
-  name = var.resource_group_name
-}
-
 resource "azurerm_kubernetes_cluster" "main" {
   default_node_pool {
     name           = "system"

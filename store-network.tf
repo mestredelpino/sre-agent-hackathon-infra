@@ -19,6 +19,6 @@ resource "azurerm_network_security_rule" "store_front_http" {
   destination_port_range      = "80"
   source_address_prefix       = "Internet"
   destination_address_prefix  = "${var.store_front_public_ip}/32"
-  resource_group_name         = azurerm_resource_group.main.name
+  resource_group_name         = data.azurerm_resource_group.main.name
   network_security_group_name = "vnet-${var.name_prefix}-subnet-aks-nsg-${var.location}"
 }
