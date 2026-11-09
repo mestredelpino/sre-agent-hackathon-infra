@@ -1,0 +1,14 @@
+{
+  "apiVersion": "cert-manager.io/v1",
+  "kind": "Certificate",
+  "metadata": {"name": "store-front", "namespace": "aks-store-demo"},
+  "spec": {
+    "secretName": "store-front-tls",
+    "subject": {"organizations": ["SRE Workshop Lab"]},
+    "duration": "2160h",
+    "renewBefore": "360h",
+    "privateKey": {"algorithm": "RSA", "size": 3072, "rotationPolicy": "Always"},
+    "usages": ["digital signature", "key encipherment", "server auth"],
+    "issuerRef": {"name": "lab-selfsigned", "kind": "Issuer", "group": "cert-manager.io"}
+  }
+}

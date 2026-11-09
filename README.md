@@ -65,6 +65,21 @@ This setup deliberately does not modify `workload.yaml`, the workshop storefront
 
 Do not export TLS Secrets or private keys to Git. Back up needed Secrets securely. Before uninstalling cert-manager, inventory dependent Certificates and issuers across all namespaces, coordinate with their owners, and follow the [upstream uninstall procedure](https://cert-manager.io/docs/installation/kubectl/#uninstalling); deleting CRDs removes their custom resources and can disrupt unrelated certificates. Terraform destroy does not manage or uninstall this post-deployment addon.
 
+## Deploy Store Demo Without DNS
+
+After installing cert-manager, use [scripts/deploy-store-demo.sh](scripts/deploy-store-demo.sh) to deploy the pinned AKS Store Demo with internal frontend Services and an AGIC TLS ingress. Run from this repository in Bash, including Azure Cloud Shell. Keep `KUBECONFIG`, `EXPECTED_CONTEXT` and `AKS_FQDN` set as above, and provide the gateway's actual public IPv4 address from Azure:
+
+```bash
+export APPGW_PUBLIC_IP="<application-gateway-public-ip>"
+bash scripts/deploy-store-demo.sh --apply --replace-sample-ingress
+```
+
+The optional `--replace-sample-ingress` explicitly authorizes deleting only `sre-hackathon/sre-web` to transfer its route to Store Demo; omit it if the sample ingress is absent. Review all other ingresses on the shared gateway before deploying: this hostless `/` route is a catch-all and must not conflict with another application's catch-all route. The script checks the API endpoint before writes, renders the pinned workload once, performs server dry-runs, and waits for certificate issuance and the frontend rollout before replacing the sample route. It needs `kubectl`, `jq`, Kubernetes deployment permissions and access to GitHub/container registries. It does not install cert-manager or AGIC. Installation is not atomic; inspect partial resources before retrying.
+
+Open `https://<application-gateway-public-ip>/` directly. No DNS or hosts-file entry is required. The script creates an IP-SAN self-signed Certificate and its `store-front-tls` Secret in `aks-store-demo`; AGIC uses `spec.tls.secretName`, not the installed gateway PFX. Browsers will still warn because the issuer is not trusted. If the gateway IP changes, rerun with the new IP. After AGIC reconciles, verify the live gateway has HTTPS-only listeners and check application health and certificate renewal; offline tests cannot establish Azure Policy acceptance. No HTTP redirect or ACME HTTP challenge is enabled.
+
+The lab's database data is not durable; do not use it for production or important data. Cleanup is `kubectl --context "$EXPECTED_CONTEXT" delete namespace aks-store-demo`, which deletes all workloads and TLS Secrets in that namespace. If the script removed the NGINX sample ingress, restore it separately when needed.
+
 ## Existing Resource Group
 
 Terraform 1.7 or newer is required. The resource group must already exist in the configured subscription. `data.azurerm_resource_group.main` reads its name, location and ID using the local `resource_group_name` input; this configuration does not create the group or manage its tags. Keep the local `location` input consistent with the existing environment because the storefront rule uses it to identify an externally managed NSG.
