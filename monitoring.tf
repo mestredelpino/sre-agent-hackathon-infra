@@ -67,6 +67,12 @@ resource "azurerm_monitor_metric_alert" "aks_node_cpu" {
     aggregation      = "Average"
     operator         = "GreaterThan"
     threshold        = 85
+
+    dimension {
+      name     = "node"
+      operator = "Include"
+      values   = ["*"]
+    }
   }
 
   action { action_group_id = azurerm_monitor_action_group.main.id }
@@ -89,8 +95,9 @@ resource "azurerm_monitor_scheduled_query_rules_alert_v2" "aks_node_not_ready" {
     query                   = <<-KQL
       KubeNodeInventory
       | where TimeGenerated > ago(10m)
+      | where ClusterId =~ "${azurerm_kubernetes_cluster.main.id}"
       | summarize arg_max(TimeGenerated, *) by Computer
-      | where Status != "Ready"
+      | where Status !has "Ready"
     KQL
     time_aggregation_method = "Count"
     operator                = "GreaterThan"
@@ -110,14 +117,16 @@ resource "azurerm_monitor_scheduled_query_rules_alert_v2" "aks_pod_restarts" {
   window_duration       = "PT15M"
   scopes                = [azurerm_log_analytics_workspace.main.id]
   severity              = 2
-  description           = "Pods restarting frequently (CrashLoopBackOff)"
+  description           = "More than five observed container restarts within 15 minutes"
   tags                  = local.tags
 
   criteria {
     query                   = <<-KQL
       KubePodInventory
       | where TimeGenerated > ago(15m)
-      | summarize Restarts = max(PodRestartCount) by Namespace, Name
+      | where ClusterId =~ "${azurerm_kubernetes_cluster.main.id}"
+      | summarize FirstCount = min(ContainerRestartCount), LastCount = max(ContainerRestartCount) by Namespace, PodUid, Name, ContainerName
+      | extend Restarts = LastCount - FirstCount
       | where Restarts > 5
     KQL
     time_aggregation_method = "Count"
@@ -129,7 +138,6 @@ resource "azurerm_monitor_scheduled_query_rules_alert_v2" "aks_pod_restarts" {
     action_groups = [azurerm_monitor_action_group.main.id]
   }
 }
-
 resource "azurerm_monitor_scheduled_query_rules_alert_v2" "aks_image_pull_failures" {
   skip_query_validation = true
   name                  = "alert-aks-image-pull-failures"
@@ -146,9 +154,11 @@ resource "azurerm_monitor_scheduled_query_rules_alert_v2" "aks_image_pull_failur
     query                   = <<-KQL
       KubeEvents
       | where TimeGenerated > ago(15m)
-      | where Reason has_any ("Failed", "BackOff", "ErrImagePull", "ImagePullBackOff")
+        | where ClusterId =~ "${azurerm_kubernetes_cluster.main.id}"
+        | where Reason in~ ("ErrImagePull", "ImagePullBackOff")
+          or (Reason in~ ("Failed", "BackOff") and Message has_any ("pull", "pulling", "ErrImagePull", "ImagePullBackOff"))
       | summarize Events = count() by Namespace, Name, Reason
-      | where Events > 2
+        | where Events > 0
     KQL
     time_aggregation_method = "Count"
     operator                = "GreaterThan"
@@ -176,6 +186,7 @@ resource "azurerm_monitor_scheduled_query_rules_alert_v2" "kv_failures" {
     query                   = <<-KQL
       AzureDiagnostics
       | where ResourceProvider == "MICROSOFT.KEYVAULT"
+      | where ResourceId =~ "${azurerm_key_vault.main.id}"
       | where ResultType !in ("Success")
       | summarize Failures = count() by ResultType, OperationName
       | where Failures > 3
@@ -205,6 +216,7 @@ resource "azurerm_monitor_scheduled_query_rules_alert_v2" "storage_auth_failures
   criteria {
     query                   = <<-KQL
       StorageBlobLogs
+      | where _ResourceId startswith "${azurerm_storage_account.main.id}/"
       | where StatusText has_any ("AuthorizationFailure", "AuthenticationFailed", "AuthorizationPermissionMismatch")
       | summarize Failures = count() by StatusText, OperationName
       | where Failures > 3

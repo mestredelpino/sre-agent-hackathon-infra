@@ -108,3 +108,32 @@ git diff --cached
 ```
 
 Ignored files are not encrypted or backed up by Git. Keep secure backups of deployment state and recovery material separately.# sre-agent-hackathon-infra
+
+## Incident Alert Coverage
+
+[monitoring.tf](monitoring.tf) retains the seven baseline alerts. Restart detection now measures observed per-container counter increases within 15 minutes instead of lifetime restarts, image-pull events are filtered by message, and cluster/dependency queries are resource-scoped. The restart delta can miss restarts before the first sample or across counter resets; it is not an exact event count. CPU alerts split by node, and Ready is treated as one of the node's reported conditions.
+
+[incident-alerts.tf](incident-alerts.tf) adds 13 rules routed to the existing action group:
+
+- Gateway failed requests: more than 10 in five minutes; average request latency: more than 2000 ms over ten minutes.
+- Gateway 5xx: more than 5 percent in ten minutes, with at least 20 requests and five errors to reduce low-volume noise.
+- Node working-set memory above 90 percent and node/device disk usage above 90 percent over ten minutes.
+- Pods older than ten minutes still Pending, observed OOMKilled status, and node memory/disk/PID pressure.
+- Missing Container Insights node inventory for 15 minutes.
+- Deployment unavailable replicas and StatefulSet unready current replicas for ten minutes, including Store Demo database pods. These detect readiness failures, not application/database correctness; the StatefulSet check does not detect every missing desired replica.
+- Persistent-volume usage above 85 percent for ten minutes and missing Kubernetes Prometheus metrics for 15 minutes.
+
+Log rules require Container Insights inventory/events and the existing gateway access diagnostic logs in `AzureDiagnostics`. New log rules validate their queries during deployment; confirm tables exist and contain this cluster's data before applying. Kubernetes inventory is eventually consistent: transient rollout conditions can be delayed, and OOM last-status values can persist after recovery. Prometheus rules use the default kube-state and kubelet metric collection already configured in this repo; custom ingestion filters must retain those series. PVC alerts only apply to persistent volumes that expose capacity metrics, not the lab's ephemeral database storage. Missing-data alerts intentionally fire if their collection pipeline is disabled. Alert evaluations, log ingestion, metric dimensions and synthetic checks can add Azure Monitor costs.
+
+[availability-alerts.tf](availability-alerts.tf) optionally adds one public HTTPS test and one availability alert, including TLS validation and a 14-day certificate-expiry check. Set `availability_test_url` in ignored local Terraform inputs to a publicly reachable storefront or catalog endpoint returning HTTP 200 with a publicly trusted certificate. It probes every five minutes from three locations and alerts when two locations fail. The default is `null`, so no Application Insights/probe resources are created. The current self-signed IP-only endpoint is not suitable for this probe; do not disable certificate validation to make it pass. For that lab, run an approved external probe that trusts the lab public certificate and reports failures to the monitoring platform. No cert-manager metrics scraping or separate certificate-exporter deployment is added here.
+
+Review thresholds against actual workshop traffic and scaling behavior. Check the existing action group's notification receivers separately; adding rules does not add a recipient or change SRE Agent configuration. After a reviewed plan/apply, exercise controlled failures, inspect alert dimensions/context and verify automatic resolution after recovery. No Azure changes or live KQL/PromQL executions are performed by local tests.
+
+Offline checks:
+
+```bash
+terraform fmt -check monitoring.tf incident-alerts.tf availability-alerts.tf
+python3 -m unittest discover -s tests -p 'test_monitoring_configuration.py' -v
+```
+
+The provider-schema test uses installed providers from `terraform init` and temporary non-secret fixture IDs, without Azure credentials or cluster access.
