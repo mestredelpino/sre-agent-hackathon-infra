@@ -96,9 +96,12 @@ metadata:
   annotations:
     kubernetes.io/ingress.class: azure/application-gateway
     appgw.ingress.kubernetes.io/health-probe-path: /
+    appgw.ingress.kubernetes.io/appgw-ssl-certificate: sre-lab-tls
+    appgw.ingress.kubernetes.io/ssl-redirect: "false"
 spec:
   rules:
-    - http:
+    - host: sre.example.test
+      http:
         paths:
           - path: /
             pathType: Prefix

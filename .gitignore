@@ -1,4 +1,9 @@
 .terraform/
+.certs/
+*.pfx
+*.p12
+*.key
+*.pem
 *.tfstate
 *.tfstate.*
 *.tfplan

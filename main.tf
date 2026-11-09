@@ -125,13 +125,13 @@ resource "azurerm_network_security_group" "appgw" {
   }
 
   security_rule {
-    name                       = "AllowHTTPInbound"
+    name                       = "AllowHTTPSInbound"
     priority                   = 110
     direction                  = "Inbound"
     access                     = "Allow"
     protocol                   = "Tcp"
     source_port_range          = "*"
-    destination_port_range     = "80"
+    destination_port_range     = "443"
     source_address_prefix      = "Internet"
     destination_address_prefix = "*"
   }
@@ -187,13 +187,13 @@ resource "azurerm_web_application_firewall_policy" "main" {
 }
 
 locals {
-  appgw_name          = "appgw-${var.name_prefix}"
-  appgw_fe_ip_config  = "appgw-frontend-ip"
-  appgw_fe_port_http  = "port-80"
-  appgw_listener_http = "listener-http"
-  appgw_backend_pool  = "pool-default"
-  appgw_http_settings = "http-settings-default"
-  appgw_routing_rule  = "rule-http"
+  appgw_name           = "appgw-${var.name_prefix}"
+  appgw_fe_ip_config   = "appgw-frontend-ip"
+  appgw_fe_port_https  = "port-443"
+  appgw_listener_https = "listener-https"
+  appgw_backend_pool   = "pool-default"
+  appgw_http_settings  = "http-settings-default"
+  appgw_routing_rule   = "rule-https"
 }
 
 resource "azurerm_application_gateway" "main" {
@@ -215,8 +215,19 @@ resource "azurerm_application_gateway" "main" {
   }
 
   frontend_port {
-    name = local.appgw_fe_port_http
-    port = 80
+    name = local.appgw_fe_port_https
+    port = 443
+  }
+
+  ssl_certificate {
+    name     = "sre-lab-tls"
+    data     = sensitive(filebase64(var.appgw_tls_pfx_path))
+    password = sensitive(trimspace(file(var.appgw_tls_password_path)))
+  }
+
+  ssl_policy {
+    policy_type = "Predefined"
+    policy_name = "AppGwSslPolicy20220101S"
   }
 
   frontend_ip_configuration {
@@ -237,16 +248,19 @@ resource "azurerm_application_gateway" "main" {
   }
 
   http_listener {
-    name                           = local.appgw_listener_http
+    name                           = local.appgw_listener_https
     frontend_ip_configuration_name = local.appgw_fe_ip_config
-    frontend_port_name             = local.appgw_fe_port_http
-    protocol                       = "Http"
+    frontend_port_name             = local.appgw_fe_port_https
+    protocol                       = "Https"
+    ssl_certificate_name           = "sre-lab-tls"
+    host_name                      = var.appgw_tls_hostname
+    require_sni                    = true
   }
 
   request_routing_rule {
     name                       = local.appgw_routing_rule
     rule_type                  = "Basic"
-    http_listener_name         = local.appgw_listener_http
+    http_listener_name         = local.appgw_listener_https
     backend_address_pool_name  = local.appgw_backend_pool
     backend_http_settings_name = local.appgw_http_settings
     priority                   = 100

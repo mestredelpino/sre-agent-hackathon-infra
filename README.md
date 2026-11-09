@@ -15,6 +15,33 @@ terraform plan -input=false
 
 The kubeconfig remains local at `./kubeconfig`. Existing processes using the old path continue through the symlink. Coordinate all edits and state operations with other agents/operators; the directory must have only one authoritative state.
 
+## HTTPS-Only Lab Gateway
+
+Generate a 90-day self-signed certificate for the sample hostname before planning:
+
+```bash
+bash scripts/create-lab-certificate.sh
+terraform fmt -check
+terraform validate
+terraform plan -input=false
+```
+
+The script requires OpenSSL and refuses to overwrite an existing `.certs/` directory. It creates a private key, certificate, password-protected PFX and random password locally; all are ignored by Git. Protect these files with filesystem permissions. Terraform reads the PFX and password and stores certificate material in state and saved plans, so keep those secure too. Never upload keys, passwords, state or saved plans to GitHub. For production, use an approved CA and preferably a Key Vault certificate reference instead of this lab PFX workflow.
+
+The gateway starts with only an HTTPS listener on port 443, using `sre-lab-tls` and a predefined TLS 1.2-or-newer policy. `workload.yaml` references that installed certificate, uses `sre.example.test`, and disables SSL redirect: an HTTP-to-HTTPS redirect would require an HTTP listener. Do not add a `spec.tls` block to this manifest when using the installed-certificate annotation. Other AGIC-managed ingresses must also use HTTPS; any HTTP ingress or redirect can make controller updates fail policy evaluation. The backend Service, pod traffic and probes still use HTTP; this change addresses listener policy, not end-to-end TLS. Additional organizational policies may require an approved issuer or different TLS settings.
+
+For a different hostname, pass it to the certificate script, set `appgw_tls_hostname` in ignored local inputs, and update the ingress host to match. The example `.test` name has no public DNS; map it locally or test with the public gateway IP without changing DNS:
+
+```bash
+curl --cacert .certs/appgw.crt --resolve "sre.example.test:443:<gateway-public-ip>" https://sre.example.test/
+```
+
+Trust the public certificate explicitly for testing; browsers will otherwise warn. After reviewing and applying Terraform, apply the sample manifest with the correct kubeconfig. Then verify fresh gateway listener configuration, AGIC logs and HTTPS application responses; local validation alone does not prove Azure Policy acceptance.
+
+Existing HTTP gateways need a coordinated migration: the gateway's `ignore_changes` entries deliberately leave frontend ports, listeners and routes to AGIC. Changing this Terraform does not replace those fields on an existing gateway. Update every ingress to HTTPS and reconcile AGIC, then inspect the resulting gateway. If policy blocks that transition, coordinate a controlled migration or recreate with the platform owner; do not remove the ignore list blindly, because Terraform's bootstrap rule would overwrite AGIC routes. New gateways, including a retry after a policy-denied creation, use the HTTPS-only bootstrap directly.
+
+The separate storefront HTTP NSG rule now defaults to disabled, even when `store_front_public_ip` is set. A reviewed apply will remove an existing rule unless `allow_store_front_http` is explicitly enabled, which is not appropriate for HTTPS-only environments. This does not migrate or change an existing Kubernetes LoadBalancer Service: disable its public exposure or route it through a separately configured HTTPS ingress. Historical HTTP recovery evidence in `RECOVERY.md` is not evidence of HTTPS compliance.
+
 ## Existing Resource Group
 
 Terraform 1.7 or newer is required. The resource group must already exist in the configured subscription. `data.azurerm_resource_group.main` reads its name, location and ID using the local `resource_group_name` input; this configuration does not create the group or manage its tags. Keep the local `location` input consistent with the existing environment because the storefront rule uses it to identify an externally managed NSG.

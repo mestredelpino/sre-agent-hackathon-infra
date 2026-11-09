@@ -1,3 +1,21 @@
+variable "appgw_tls_hostname" {
+  description = "Hostname covered by the gateway certificate; keep the ingress host in sync."
+  type        = string
+  default     = "sre.example.test"
+}
+
+variable "appgw_tls_pfx_path" {
+  description = "Local PFX bundle; never commit this file."
+  type        = string
+  default     = ".certs/appgw.pfx"
+}
+
+variable "appgw_tls_password_path" {
+  description = "Local file containing the PFX password; never commit this file."
+  type        = string
+  default     = ".certs/pfx-password"
+}
+
 variable "resource_group_name" {
   description = "Existing deployment resource-group name, supplied through ignored local inputs."
   type        = string
