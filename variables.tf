@@ -51,6 +51,16 @@ variable "name_prefix" {
   }
 }
 
+variable "grafana_admin_group_object_id" {
+  description = "Entra security group object ID for Grafana Admin; null retains the deploying identity as admin."
+  type        = string
+  default     = null
+  validation {
+    condition     = var.grafana_admin_group_object_id == null ? true : can(regex("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$", var.grafana_admin_group_object_id))
+    error_message = "Provide the Entra group object ID as a GUID, or null."
+  }
+}
+
 variable "alert_email" {
   description = "Email address to receive alert notifications. Leave empty to skip the email receiver."
   type        = string

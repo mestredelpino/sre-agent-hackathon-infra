@@ -3,6 +3,7 @@ subscription_id        = ""
 location               = ""
 name_prefix            = "yourprefix"
 alert_email            = ""
+grafana_admin_group_object_id = null
 store_front_public_ip  = null
 allow_store_front_http = false
 appgw_tls_hostname      = "sre.example.test"

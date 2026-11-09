@@ -58,7 +58,8 @@ resource "azurerm_role_assignment" "grafana_monitoring_reader" {
 resource "azurerm_role_assignment" "grafana_admin" {
   scope                = azurerm_dashboard_grafana.main.id
   role_definition_name = "Grafana Admin"
-  principal_id         = data.azurerm_client_config.current.object_id
+  principal_id         = var.grafana_admin_group_object_id != null ? var.grafana_admin_group_object_id : data.azurerm_client_config.current.object_id
+  principal_type       = var.grafana_admin_group_object_id != null ? "Group" : null
 }
 
 resource "azurerm_monitor_data_collection_endpoint" "prometheus" {

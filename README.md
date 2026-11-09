@@ -42,6 +42,29 @@ Existing HTTP gateways need a coordinated migration: the gateway's `ignore_chang
 
 The separate storefront HTTP NSG rule now defaults to disabled, even when `store_front_public_ip` is set. A reviewed apply will remove an existing rule unless `allow_store_front_http` is explicitly enabled, which is not appropriate for HTTPS-only environments. This does not migrate or change an existing Kubernetes LoadBalancer Service: disable its public exposure or route it through a separately configured HTTPS ingress. Historical HTTP recovery evidence in `RECOVERY.md` is not evidence of HTTPS compliance.
 
+## Optional cert-manager Setup
+
+After Terraform creates AKS and an operator has verified the dedicated kubeconfig, install cert-manager with the explicit post-deployment script. It is not run by `terraform apply`. The script pins the upstream static manifest to v1.21.3, including CRDs, controllers, admission webhooks and cluster-wide RBAC. Check the [supported Kubernetes versions](https://cert-manager.io/docs/releases/) and review the [installation manifest](https://github.com/cert-manager/cert-manager/releases/download/v1.21.3/cert-manager.yaml) before installation. Internet access to GitHub and the controller image registry is required. Do not run over an existing Helm, GitOps or platform-managed cert-manager installation; coordinate with its owner instead.
+
+Installation requires Kubernetes permission to manage namespaces, CRDs, ClusterRoles, ClusterRoleBindings, webhook configurations and Deployments. Azure Grafana roles or permission to download a kubeconfig do not grant these Kubernetes permissions. Obtain approved cluster setup authorization; do not bypass denied access with shared admin credentials.
+
+```bash
+export KUBECONFIG="<dedicated-kubeconfig-path>"
+export EXPECTED_CONTEXT="<approved-context>"
+export AKS_FQDN="<approved-aks-api-hostname>"
+kubectl kustomize cluster/cert-manager
+bash scripts/install-cert-manager.sh --apply
+kubectl --context "$EXPECTED_CONTEXT" -n cert-manager-lab get issuers,certificates
+```
+
+The installer checks the selected API server against `AKS_FQDN` before writes, performs server dry-runs, waits for controllers, and verifies issuance. If the webhook is not yet ready for the configuration dry-run, investigate controller readiness and retry; it does not bypass admission failures. Installation is not atomic; a failure can leave controllers or the lab namespace installed.
+
+The lab configuration uses a namespaced `lab-selfsigned` Issuer in `cert-manager-lab`. Its `sre-example` Certificate issues `sre.example.test` into the `sre-example-tls` Secret, valid for 90 days and renewed 15 days before expiry with key rotation. This is a self-signed test certificate, not a trusted CA; browser trust and hostname resolution remain separate requirements. No ACME account, DNS permissions or port-80 challenge listener is configured. For public trust, use an approved real domain and an approved issuer; DNS-01 is compatible with the HTTPS-only listener restriction, while HTTP-01 requires port 80.
+
+This setup deliberately does not modify `workload.yaml`, the workshop storefront ingress, the bootstrap `.certs/` files or Terraform's installed `sre-lab-tls` gateway certificate. Cert-manager renews only its Kubernetes Secret. To serve a cert-manager Secret through AGIC later, create the Issuer/Certificate in the application's namespace and coordinate replacing the installed-certificate annotation with `spec.tls.secretName`; do not enable HTTP redirects. Validate the installed AGIC version produces HTTPS-only listeners and accepts Secret renewal before migrating. Avoid overlapping host/path routes between the NGINX and storefront ingresses. No automatic Secret-to-PFX/Key Vault synchronization is provided here.
+
+Do not export TLS Secrets or private keys to Git. Back up needed Secrets securely. Before uninstalling cert-manager, inventory dependent Certificates and issuers across all namespaces, coordinate with their owners, and follow the [upstream uninstall procedure](https://cert-manager.io/docs/installation/kubectl/#uninstalling); deleting CRDs removes their custom resources and can disrupt unrelated certificates. Terraform destroy does not manage or uninstall this post-deployment addon.
+
 ## Existing Resource Group
 
 Terraform 1.7 or newer is required. The resource group must already exist in the configured subscription. `data.azurerm_resource_group.main` reads its name, location and ID using the local `resource_group_name` input; this configuration does not create the group or manage its tags. Keep the local `location` input consistent with the existing environment because the storefront rule uses it to identify an externally managed NSG.
